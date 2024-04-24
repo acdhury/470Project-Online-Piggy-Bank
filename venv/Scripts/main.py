@@ -185,32 +185,45 @@ async def add_money(amount: float, current_user: User = Depends(get_current_user
 
 
 
+
 @app.post("/withdraw_money")
 async def withdraw_money(amount: float, current_user: User = Depends(get_current_user)):
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount should be positive")
 
     # Check if user has sufficient balance
-    current_user_savings = await UserSavings.filter(user=current_user).first()
-    if current_user_savings.balance < amount:
+    user_deposits_list = await Deposit.filter(user=current_user).order_by('-deposit_date').values('amount', 'deposit_date')
+    
+    if not user_deposits_list:
+        raise HTTPException(status_code=400, detail="No deposits found")
+
+    last_deposit_date = user_deposits_list[0]['deposit_date']
+    today_date = datetime.now().date()
+
+    # Check if last deposit is less than 7 days old
+    if (today_date - last_deposit_date).days < 7:
+        raise HTTPException(status_code=400, detail="Cannot withdraw as last deposit is less than 7 days old")
+
+    total_balance = sum([item['amount'] for item in user_deposits_list])
+
+    if total_balance < amount:
         raise HTTPException(status_code=400, detail="Insufficient balance")
 
-    # Deduct withdrawal amount from user's balance
-    new_balance = current_user_savings.balance - amount
-    await UserSavings.filter(user=current_user).update(balance=new_balance)
-
-    # Create transaction record for the withdrawal
-    transaction = await Transaction.create(
+    # Create a new withdrawal record with today's date
+    withdrawal = await Withdrawal.create(
         user=current_user,
         amount=amount,
-        transaction_type="withdrawal"
+        withdrawal_date=today_date  
     )
+
+    # Calculate new balance after withdrawal
+    new_balance = float(total_balance) - float(amount)
 
     return {
         "status": "ok",
         "data": {
             "main_balance": new_balance,
-            "transaction_id": transaction.id
+            "withdrawal_id": withdrawal.id
         }
     }
 
