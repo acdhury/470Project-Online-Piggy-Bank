@@ -1,4 +1,3 @@
-# authentication.py
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from models import User
@@ -15,7 +14,7 @@ async def verify_password(plain_password, hashed_password):
 async def authenticate_user(email, password):
     user = await User.get(email=email)
 
-    if user and await verify_password(password, user.password):
+    if user and await verify_password(password, user.password_hash):
         return user
     return None
 

@@ -2,6 +2,9 @@ from tortoise.models import Model
 from tortoise import fields
 from tortoise.contrib.pydantic import pydantic_model_creator
 from pydantic import BaseModel, Field
+from datetime import date
+
+
 class User(Model):
     id = fields.IntField(pk=True)
     username = fields.CharField(max_length=50, unique=True)
@@ -13,6 +16,7 @@ class User(Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     is_superuser = fields.BooleanField(default=False)
     phone_number = fields.CharField(max_length=20, null=True)
+
 
 class UserIn(BaseModel):
     username: str = Field(..., alias="username")
@@ -31,40 +35,25 @@ class UserOut(BaseModel):
     phone_number: str = Field(None, alias="phone_number")
     address: str = Field(None, alias="address")
 
-# Define other Pydantic models similarly
 
-class Transaction(Model):
-    id = fields.IntField(pk=True)
-    #tran_id=fields.ForeignKeyField('models.User',related_name='transaction')
-    user = fields.ForeignKeyField('models.User', related_name='transaction',on_delete=fields.CASCADE)
+class Deposit(Model):
+    user = fields.ForeignKeyField('models.User', related_name='deposits')
     amount = fields.DecimalField(max_digits=12, decimal_places=2)
-    transaction_type = fields.CharField(max_length=10)
-    transaction_time = fields.DatetimeField(auto_now_add=True)
+    deposit_date = fields.DateField(auto_now_add=True)
+    
     class Meta:
-        ordering = ['-transaction_time']
-#class transaction_details(Model):
- #   bank_name=
-  #  acc_no=
+        table = "deposits"
 
-class SavingsPlan(Model):
-    name = fields.CharField(max_length=100)
-    description = fields.TextField()
-    withdrawal_period = fields.IntField()  # Withdrawal period in days
-
-class UserSavings(Model):
-    id = fields.IntField(pk=True)
-    #sav_id=fields.ForeignKeyField('models.User',related_name='UserSavings')
-    user = fields.ForeignKeyField('models.User', related_name='User_Savings',on_delete=fields.CASCADE)
-    plan = fields.ForeignKeyField('models.SavingsPlan', related_name='UserSavings')
+class Withdrawal(Model):
+    user = fields.ForeignKeyField('models.User', related_name='withdrawals')
     amount = fields.DecimalField(max_digits=12, decimal_places=2)
-    start_date = fields.DateField(auto_now_add=True)
-    end_date = fields.DateField(null=True)  # Date when the plan ends
+    withdrawal_date = fields.DateField(auto_now_add=True)
+    
     class Meta:
-        ordering = ['-start_date']
+        table = "withdrawals"
 
 user_pydantic = pydantic_model_creator(User, name="User", exclude = ("created_at"))
 user_pydanticIn = pydantic_model_creator(User,name = "UserIn", exclude_readonly=True,exclude = ("created_at", ))
 user_pydanticOut = pydantic_model_creator(User, name = "UserOut",exclude_readonly=True,exclude=("date_of_birth","full_name","email","address","phone_number","created_at", "is_superuser", "id"))
-SavingsPlan_PydanticOut = pydantic_model_creator(SavingsPlan, name="SavingsPlan",exclude_readonly=True)
-Transaction_Pydantic = pydantic_model_creator(Transaction, name="Transaction",exclude_readonly=True)
-UserSavings_Pydantic = pydantic_model_creator(UserSavings, name="UserSavings",exclude_readonly=True)
+deposit_pydantic = pydantic_model_creator(Deposit, name="Deposit", exclude_readonly=True)
+withdrawal_pydantic = pydantic_model_creator(Withdrawal, name="Withdrawal", exclude_readonly=True)

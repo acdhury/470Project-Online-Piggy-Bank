@@ -1,19 +1,26 @@
+from datetime import datetime, timedelta
 from tortoise.transactions import in_transaction
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from models import User,user_pydantic, user_pydanticIn,SavingsPlan,SavingsPlan_PydanticOut
 from fastapi import FastAPI, Depends, HTTPException, status
 from tortoise.contrib.fastapi import register_tortoise
 from authentication import get_hashed_password, token_generator
+from models import *
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import jwt
 import secrets
 from pydantic import BaseModel
-#from tortoise import run_async,Tortoise
 from fastapi.middleware.cors import CORSMiddleware 
+
+
+
+
 app=FastAPI()
+
 origin=[
     "http://localhost:3000"
 ]
+
+
 app.add_middleware(
         CORSMiddleware,
         allow_origins=origin,
@@ -21,15 +28,13 @@ app.add_middleware(
         allow_methods=['*'],
         allow_headers=['*']
 )
-class UserIn(BaseModel):
-    username: str
-    email: str
-    password_hash: str 
-    full_name: str 
-    phone_number: str 
-    address: str
-    is_superuser: bool
-    date_of_birth: str
+
+
+
+@app.get("/")
+async def read_root():
+    return {"message": "Hello, World!"}
+
 @app.post("/register")
 async def register(user_in: UserIn):
     # Extract the password from the input
@@ -45,11 +50,17 @@ async def register(user_in: UserIn):
         user_obj = await User.create(**user_info)
         response = await user_pydantic.from_tortoise_orm(user_obj)
         return {"status": "ok", "data": response}
+
+
+
 @app.get("/admin{get_id}")
 async def root():
     response=await user_pydantic.from_queryset(User.all())
     return {"status": "ok","data": response}
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/token')
+
+
+
 @app.put("/admin/{get_id}")
 async def update(get_id:int ,info: user_pydanticIn):
     user=await User.get(id=get_id)
@@ -62,6 +73,7 @@ async def update(get_id:int ,info: user_pydanticIn):
     response=await user_pydantic.from_tortoise_orm(user)
     return {"status": "ok","data": response}
 
+
 @app.delete("/admin/{get_id}")
 async def delete_info(get_id: int):
     user = await User.get(id=get_id)
@@ -70,15 +82,17 @@ async def delete_info(get_id: int):
 config_credential = {
     'SECRET': secrets.token_urlsafe(32)
 }
+
+
 @app.post('/token')
 async def generate_token(request_form: OAuth2PasswordRequestForm = Depends()):
     # Use config_credential['SECRET'] to access the secret key
     token = await token_generator(request_form.username, request_form.password, config_credential['SECRET'])
     return {"access_token": token, "token_type": "bearer"}
 
+
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
-        # Use config_credential['SECRET'] to access the secret key
         payload = jwt.decode(token, config_credential['SECRET'], algorithms=['HS256'])
         user = await User.get(id=payload.get("id"))
         return user
@@ -94,6 +108,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    
+
 @app.post("/user/me")
 async def user_login(current_user: User = Depends(get_current_user)):
     return {
@@ -104,15 +121,101 @@ async def user_login(current_user: User = Depends(get_current_user)):
     }
 
 
-@app.get("/savings_plans")
-async def get_savings_plans():
-    response = await SavingsPlan_PydanticOut.from_queryset(SavingsPlan.all())
-    return {"status": "ok","data": response}
-@app.post("/savings_plans")
-async def plans(info:SavingsPlan_PydanticOut):
-    plan=await SavingsPlan.create(**info.dict(exclude_unset=True))
-    response=await SavingsPlan_PydanticOut.from_tortoise_orm(plan)
-    return{"status":"ok","data":response}
+@app.get("/homepage")
+async def homepage(current_user: User = Depends(get_current_user)):
+    # Calculate total balance
+    user_deposits_list = await Deposit.filter(user=current_user).values('amount')
+    total_balance = sum([item['amount'] for item in user_deposits_list])
+
+    # Fetch all user's deposits
+    user_deposits = await Deposit.filter(user=current_user)
+
+    deposits_data = []
+    for deposit in user_deposits:
+        deposits_data.append({
+            "amount": deposit.amount,
+            "deposit_date": deposit.deposit_date
+        })
+
+    # User details
+    user_details = {
+        "username": current_user.username,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "phone_number": current_user.phone_number,
+        "address": current_user.address,
+        "date_of_birth": str(current_user.date_of_birth) if current_user.date_of_birth else None,
+        "is_superuser": current_user.is_superuser
+    }
+
+    return {
+        "status": "ok",
+        "user_details": user_details,
+        "bank_balance": total_balance,
+        "deposits": deposits_data
+    }
+
+
+@app.post("/add_money")
+async def add_money(amount: float, current_user: User = Depends(get_current_user)):
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount should be positive")
+
+    # Get today's date
+    today_date = datetime.now().date()
+
+    # Create a new deposit record with today's date
+    deposit = await Deposit.create(
+        user=current_user,
+        amount=amount,
+        deposit_date=today_date  # Set today's date
+    )
+
+    # Calculate new balance
+    user_deposits_list = await Deposit.filter(user=current_user).values('amount')
+    new_balance = sum([item['amount'] for item in user_deposits_list])
+
+    return {
+        "status": "ok",
+        "data": {
+            "main_balance": new_balance,
+            "deposit_id": deposit.id
+        }
+    }
+
+
+
+@app.post("/withdraw_money")
+async def withdraw_money(amount: float, current_user: User = Depends(get_current_user)):
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount should be positive")
+
+    # Check if user has sufficient balance
+    current_user_savings = await UserSavings.filter(user=current_user).first()
+    if current_user_savings.balance < amount:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+
+    # Deduct withdrawal amount from user's balance
+    new_balance = current_user_savings.balance - amount
+    await UserSavings.filter(user=current_user).update(balance=new_balance)
+
+    # Create transaction record for the withdrawal
+    transaction = await Transaction.create(
+        user=current_user,
+        amount=amount,
+        transaction_type="withdrawal"
+    )
+
+    return {
+        "status": "ok",
+        "data": {
+            "main_balance": new_balance,
+            "transaction_id": transaction.id
+        }
+    }
+
+
+
 
 register_tortoise(
     app,
