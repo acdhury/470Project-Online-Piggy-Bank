@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
 from tortoise.transactions import in_transaction
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Form 
 from tortoise.contrib.fastapi import register_tortoise
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from authentication import get_hashed_password, token_generator
 from models import *
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -20,6 +22,7 @@ origin=[
     "http://localhost:3000"
 ]
 
+templates = Jinja2Templates(directory="frontend/templates")
 
 app.add_middleware(
         CORSMiddleware,
@@ -34,6 +37,11 @@ app.add_middleware(
 @app.get("/")
 async def read_root():
     return {"message": "Hello, World!"}
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def get_register(request: Request):
+    return templates.TemplateResponse("register.html", {"request":request})
 
 @app.post("/register")
 async def register(user_in: UserIn):
@@ -82,6 +90,11 @@ async def delete_info(get_id: int):
 config_credential = {
     'SECRET': secrets.token_urlsafe(32)
 }
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def get_login(request:Request):
+    return templates.TemplateResponse("login.html",{"request":request})
 
 
 @app.post('/token')
@@ -156,6 +169,11 @@ async def homepage(current_user: User = Depends(get_current_user)):
     }
 
 
+@app.get("/add-money", response_class=HTMLResponse)
+async def get_add_money(request:Request):
+    return templates.TemplateResponse("add-money.html", {"request":request})
+
+
 @app.post("/add_money")
 async def add_money(amount: float, current_user: User = Depends(get_current_user)):
     if amount <= 0:
@@ -184,6 +202,9 @@ async def add_money(amount: float, current_user: User = Depends(get_current_user
     }
 
 
+@app.get("/withdraw", response_class=HTMLResponse)
+async def withdraw(request:Request):
+    return templates.TemplateResponse("withdraw.html", {"request":request})
 
 
 @app.post("/withdraw_money")

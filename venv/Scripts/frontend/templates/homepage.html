@@ -1,0 +1,25 @@
+<!-- frontend/templates/homepage.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Homepage</title>
+</head>
+<body>
+    <h1>Welcome, {{ user_details.username }}!</h1>
+    <p>Email: {{ user_details.email }}</p>
+    <p>Phone Number: {{ user_details.phone_number }}</p>
+    <p>Address: {{ user_details.address }}</p>
+    <p>Bank Balance: {{ bank_balance }}</p>
+
+    <h2>Transactions</h2>
+    <ul>
+        {% for deposit in deposits %}
+            <li>Deposited {{ deposit.amount }} on {{ deposit.deposit_date }}</li>
+        {% endfor %}
+    </ul>
+
+    <a href="/add_money"><button>Add Money</button></a>
+    <a href="/withdraw_money"><button>Withdraw Money</button></a>
+</body>
+</html>
